@@ -72,6 +72,8 @@ function renderCalendar(){
     cell.dataset.date = cellStr;
 
     const dayBookings = bookingsForDate(cellStr);
+
+    // Versi teks lengkap — ditampilkan di tablet/desktop (lihat .day-tags di CSS)
     const visibleTags = dayBookings.slice(0, 3).map(b => {
       const res = getResource(b.resourceId);
       return `<div class="tag ${b.status}">
@@ -79,13 +81,20 @@ function renderCalendar(){
                 <span class="tag-name">${res.name}</span>
               </div>`;
     }).join("");
-
     const moreCount = dayBookings.length - 3;
     const moreHtml = moreCount > 0 ? `<div class="tag-more">+${moreCount} lainnya</div>` : "";
+
+    // Versi dot ringkas — ditampilkan di mobile kecil (lihat .day-dots di CSS)
+    const visibleDots = dayBookings.slice(0, 4).map(b =>
+      `<span class="day-dot ${b.status}"></span>`
+    ).join("");
+    const dotMoreCount = dayBookings.length - 4;
+    const dotMoreHtml = dotMoreCount > 0 ? `<span class="day-dot-more">+${dotMoreCount}</span>` : "";
 
     cell.innerHTML = `
       <div class="day-number">${cellDate.getDate()}</div>
       <div class="day-tags">${visibleTags}${moreHtml}</div>
+      <div class="day-dots">${visibleDots}${dotMoreHtml}</div>
     `;
 
     cell.addEventListener("click", () => openDrawer(cellStr));
@@ -198,6 +207,33 @@ function checkAvailability(){
 document.addEventListener("DOMContentLoaded", () => {
   renderResourceList();
   renderCalendar();
+
+  // Sidebar toggle (mobile burger menu)
+  const sidebar = document.getElementById("sidebar");
+  const scrim = document.getElementById("sidebarScrim");
+
+  function openSidebar(){
+    sidebar.classList.add("open");
+    scrim.classList.add("open");
+    document.body.classList.add("sidebar-locked");
+  }
+  function closeSidebar(){
+    sidebar.classList.remove("open");
+    scrim.classList.remove("open");
+    document.body.classList.remove("sidebar-locked");
+  }
+
+  document.getElementById("openSidebarBtn").addEventListener("click", openSidebar);
+  document.getElementById("closeSidebarBtn").addEventListener("click", closeSidebar);
+  scrim.addEventListener("click", closeSidebar);
+
+  // Mobile "+" button in topbar opens the same booking modal
+  document.getElementById("btnNewBookingMobile").addEventListener("click", () => openModal());
+
+  // Close sidebar automatically if window is resized to desktop width
+  window.addEventListener("resize", () => {
+    if(window.innerWidth >= 900) closeSidebar();
+  });
 
   // Filter checkboxes
   document.querySelectorAll(".filter-type").forEach(cb => {
