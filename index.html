@@ -47,6 +47,11 @@
       <span class="plus">+</span> Ajukan Peminjaman
     </button>
 
+    <button class="btn-secondary btn-new" id="btnRecap">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2.5h12M2 6h12M2 9.5h8M2 13h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Rekapitulasi
+    </button>
+
     <div class="sidebar-section">
       <h3>Jenis Resource</h3>
       <label class="check-row">
@@ -106,7 +111,7 @@
     </div>
 
     <footer class="app-footer">
-      &copy; 2026 | created with love by seimpairiyun
+      &copy; 2026 Aman Kedan
     </footer>
 
   </main>
@@ -185,6 +190,58 @@
   </div>
 </div>
 
+<!-- ===== RECAP MODAL ===== -->
+<div class="modal-overlay" id="recapOverlay">
+  <div class="modal modal-wide">
+    <div class="modal-head">
+      <h2>Rekapitulasi Peminjaman</h2>
+      <button class="icon-btn" id="closeRecap" aria-label="Tutup">&times;</button>
+    </div>
+
+    <div class="recap-toolbar">
+      <div class="recap-filters">
+        <select id="recapTypeFilter" class="recap-select">
+          <option value="all">Semua Jenis</option>
+          <option value="mobil">Mobil Dinas</option>
+          <option value="ruangan">Ruang Rapat</option>
+        </select>
+        <select id="recapStatusFilter" class="recap-select">
+          <option value="all">Semua Status</option>
+          <option value="approved">Disetujui</option>
+          <option value="pending">Menunggu</option>
+          <option value="rejected">Ditolak</option>
+        </select>
+        <input type="month" id="recapMonthFilter" class="recap-select">
+      </div>
+      <button class="btn-primary btn-export" id="btnExportExcel">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5v9M8 10.5l-3-3M8 10.5l3-3M2.5 13.5h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download Excel
+      </button>
+    </div>
+
+    <div class="recap-table-wrap">
+      <table class="recap-table" id="recapTable">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Jam</th>
+            <th>Jenis</th>
+            <th>Unit</th>
+            <th>Keperluan</th>
+            <th>Pemohon</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="recapTableBody"><!-- filled by JS --></tbody>
+      </table>
+      <div class="recap-empty" id="recapEmpty">Tidak ada data yang cocok dengan filter.</div>
+    </div>
+
+    <div class="recap-summary" id="recapSummary"><!-- filled by JS --></div>
+  </div>
+</div>
+
+<script src="xlsx.full.min.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

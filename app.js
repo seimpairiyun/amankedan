@@ -203,6 +203,113 @@ function checkAvailability(){
   }
 }
 
+// ====== REKAPITULASI: render tabel + filter + export Excel ======
+const statusLabelMap = { approved: "Disetujui", pending: "Menunggu", rejected: "Ditolak" };
+const typeLabelMap = { mobil: "Mobil Dinas", ruangan: "Ruang Rapat" };
+
+function getFilteredRecapData(){
+  const typeFilter = document.getElementById("recapTypeFilter").value;
+  const statusFilter = document.getElementById("recapStatusFilter").value;
+  const monthFilter = document.getElementById("recapMonthFilter").value; // format YYYY-MM
+
+  return BOOKINGS
+    .filter(b => {
+      const res = getResource(b.resourceId);
+      if(typeFilter !== "all" && res.type !== typeFilter) return false;
+      if(statusFilter !== "all" && b.status !== statusFilter) return false;
+      if(monthFilter && !b.date.startsWith(monthFilter)) return false;
+      return true;
+    })
+    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+}
+
+function renderRecapTable(){
+  const data = getFilteredRecapData();
+  const tbody = document.getElementById("recapTableBody");
+  const emptyState = document.getElementById("recapEmpty");
+
+  if(data.length === 0){
+    tbody.innerHTML = "";
+    emptyState.classList.add("show");
+  } else {
+    emptyState.classList.remove("show");
+    tbody.innerHTML = data.map(b => {
+      const res = getResource(b.resourceId);
+      return `
+        <tr>
+          <td>${fmtDateLong(b.date)}</td>
+          <td>${b.start}–${b.end}</td>
+          <td>${typeLabelMap[res.type]}</td>
+          <td>${res.name} <span style="color:var(--ink-faint)">(${res.code})</span></td>
+          <td class="col-purpose">${b.purpose}</td>
+          <td>${b.requester}</td>
+          <td><span class="recap-status-badge ${b.status}">${statusLabelMap[b.status]}</span></td>
+        </tr>`;
+    }).join("");
+  }
+
+  // Summary ringkas: total per status dari hasil filter saat ini
+  const total = data.length;
+  const approved = data.filter(b => b.status === "approved").length;
+  const pending = data.filter(b => b.status === "pending").length;
+  const rejected = data.filter(b => b.status === "rejected").length;
+  document.getElementById("recapSummary").innerHTML = `
+    <span>Total: <strong>${total}</strong></span>
+    <span>Disetujui: <strong>${approved}</strong></span>
+    <span>Menunggu: <strong>${pending}</strong></span>
+    <span>Ditolak: <strong>${rejected}</strong></span>
+  `;
+}
+
+function openRecap(){
+  document.getElementById("recapOverlay").classList.add("open");
+  renderRecapTable();
+}
+
+function closeRecap(){
+  document.getElementById("recapOverlay").classList.remove("open");
+}
+
+function exportRecapToExcel(){
+  const data = getFilteredRecapData();
+
+  if(data.length === 0){
+    alert("Tidak ada data untuk diekspor. Coba ubah filter terlebih dahulu.");
+    return;
+  }
+
+  // Susun data jadi array-of-objects dengan header berbahasa Indonesia,
+  // supaya hasil file Excel langsung enak dibaca tanpa perlu rename kolom.
+  const rows = data.map(b => {
+    const res = getResource(b.resourceId);
+    return {
+      "Tanggal": fmtDateLong(b.date),
+      "Jam Mulai": b.start,
+      "Jam Selesai": b.end,
+      "Jenis": typeLabelMap[res.type],
+      "Unit": res.name,
+      "Kode/Lokasi": res.code,
+      "Keperluan": b.purpose,
+      "Pemohon": b.requester,
+      "Status": statusLabelMap[b.status]
+    };
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+
+  // Lebar kolom otomatis biar tidak terlalu sempit dibuka di Excel
+  worksheet["!cols"] = [
+    { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 14 },
+    { wch: 18 }, { wch: 14 }, { wch: 32 }, { wch: 18 }, { wch: 12 }
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Rekapitulasi");
+
+  const today = fmtDateStr(new Date());
+  XLSX.writeFile(workbook, `Rekapitulasi-Peminjaman-AmanKedan-${today}.xlsx`);
+}
+
 // ====== EVENT BINDINGS ======
 document.addEventListener("DOMContentLoaded", () => {
   renderResourceList();
@@ -314,4 +421,22 @@ document.addEventListener("DOMContentLoaded", () => {
     renderCalendar();
     alert(`Pengajuan berhasil dikirim!\n\n${res.name} · ${date}\n${start}–${end}\nStatus: Menunggu persetujuan`);
   });
+
+  // Recap modal: open/close
+  document.getElementById("btnRecap").addEventListener("click", () => {
+    closeSidebar(); // tutup sidebar mobile dulu kalau lagi terbuka
+    openRecap();
+  });
+  document.getElementById("closeRecap").addEventListener("click", closeRecap);
+  document.getElementById("recapOverlay").addEventListener("click", (e) => {
+    if(e.target.id === "recapOverlay") closeRecap();
+  });
+
+  // Recap filters — live update tabel begitu filter diganti
+  ["recapTypeFilter","recapStatusFilter","recapMonthFilter"].forEach(id => {
+    document.getElementById(id).addEventListener("change", renderRecapTable);
+  });
+
+  // Export ke Excel
+  document.getElementById("btnExportExcel").addEventListener("click", exportRecapToExcel);
 });
