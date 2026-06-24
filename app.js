@@ -40,16 +40,37 @@ function rangeDayCount(startDate, endDate){
   return Math.round((end - start) / 86400000) + 1;
 }
 
+// Cek apakah sebuah resource sedang dibooking pada tanggal hari ini.
+// Status "rejected" tidak dihitung karena tidak benar-benar memblokir unit;
+// "pending" tetap dihitung supaya tidak terjadi potensi double-booking
+// selagi menunggu approval.
+function isResourceBookedToday(resourceId){
+  const todayStr = fmtDateStr(new Date());
+  return BOOKINGS.some(b =>
+    b.resourceId === resourceId &&
+    b.status !== "rejected" &&
+    todayStr >= b.startDate && todayStr <= b.endDate
+  );
+}
+
 // ====== RENDER: SIDEBAR RESOURCE LIST ======
 function renderResourceList(){
   const list = document.getElementById("resourceList");
   list.innerHTML = "";
-  RESOURCES.filter(r => activeTypes.has(r.type)).forEach(r => {
-    const chip = document.createElement("div");
-    chip.className = "resource-chip";
-    chip.innerHTML = `<strong>${r.type === "mobil" ? "🚗" : "🏛"} ${r.name}</strong><span>${r.code} · ${r.capacity}</span>`;
-    list.appendChild(chip);
-  });
+  RESOURCES
+    .filter(r => activeTypes.has(r.type))
+    .filter(r => !isResourceBookedToday(r.id)) // sembunyikan unit yang sedang terpakai hari ini
+    .forEach(r => {
+      const chip = document.createElement("div");
+      chip.className = "resource-chip";
+      chip.innerHTML = `<strong>${r.type === "mobil" ? "🚗" : "🏛"} ${r.name}</strong><span>${r.code} · ${r.capacity}</span>`;
+      list.appendChild(chip);
+    });
+
+  // Pesan kalau semua unit pada kategori yang dipilih sedang terpakai hari ini
+  if(list.children.length === 0){
+    list.innerHTML = `<div class="resource-empty">Semua unit sedang dipakai hari ini.</div>`;
+  }
 }
 
 // ====== RENDER: CALENDAR GRID ======
@@ -147,7 +168,7 @@ function openDrawer(dateStr){
           ${rangeInfo}
           <div class="booking-resource">${res.type === "mobil" ? "🚗" : "🏛"} ${res.name} <span style="color:var(--ink-faint); font-weight:400;">· ${res.code}</span></div>
           <div class="booking-purpose">${b.purpose}</div>
-          <div class="booking-requester">👤 ${b.requester}</div>
+          <div class="booking-requester">👤 ${b.requester}${b.division ? ` <span class="booking-division">· ${b.division}</span>` : ""}</div>
           ${letterInfo}
         </div>`;
     }).join("");
@@ -288,6 +309,7 @@ function renderRecapTable(){
           <td>${res.name} <span style="color:var(--ink-faint)">(${res.code})</span></td>
           <td class="col-purpose">${b.purpose}</td>
           <td>${b.requester}</td>
+          <td>${b.division || "-"}</td>
           <td>${b.letterNumber || "-"}</td>
           <td><span class="recap-status-badge ${b.status}">${statusLabelMap[b.status]}</span></td>
         </tr>`;
@@ -338,6 +360,7 @@ function exportRecapToExcel(){
       "Kode/Lokasi": res.code,
       "Keperluan": b.purpose,
       "Pemohon": b.requester,
+      "Bidang/Divisi": b.division || "-",
       "Nomor Surat/Nota Dinas": b.letterNumber || "-",
       "Status": statusLabelMap[b.status]
     };
@@ -348,7 +371,7 @@ function exportRecapToExcel(){
   // Lebar kolom otomatis biar tidak terlalu sempit dibuka di Excel
   worksheet["!cols"] = [
     { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 14 },
-    { wch: 18 }, { wch: 14 }, { wch: 32 }, { wch: 18 }, { wch: 20 }, { wch: 12 }
+    { wch: 18 }, { wch: 14 }, { wch: 32 }, { wch: 18 }, { wch: 16 }, { wch: 20 }, { wch: 12 }
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -469,16 +492,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const end = document.getElementById("endTime").value;
     const purpose = document.getElementById("purposeInput").value;
     const requester = document.getElementById("nameInput").value;
+    const division = document.getElementById("divisionInput").value;
     const letterNumber = document.getElementById("letterNumberInput").value;
 
     BOOKINGS.push({
       id: "bk-" + Date.now(),
-      resourceId, startDate, endDate, start, end, purpose, requester, letterNumber,
+      resourceId, startDate, endDate, start, end, purpose, requester, division, letterNumber,
       status: "pending"
     });
 
     closeModal();
     renderCalendar();
+    renderResourceList(); // unit yang baru dibooking hari ini bisa langsung hilang dari daftar tersedia
 
     const rangeText = startDate === endDate
       ? fmtDateLong(startDate)
