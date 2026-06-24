@@ -27,8 +27,17 @@ function getResource(id){ return RESOURCES.find(r => r.id === id); }
 function bookingsForDate(dateStr){
   return BOOKINGS.filter(b => {
     const res = getResource(b.resourceId);
-    return b.date === dateStr && activeTypes.has(res.type);
+    // dateStr berada dalam rentang [startDate, endDate] — perbandingan string
+    // aman karena format YYYY-MM-DD selalu terurut leksikografis sama dengan kronologis.
+    return dateStr >= b.startDate && dateStr <= b.endDate && activeTypes.has(res.type);
   }).sort((a,b) => a.start.localeCompare(b.start));
+}
+
+// Hitung jumlah hari dalam rentang (inklusif), untuk label "3 hari" dsb.
+function rangeDayCount(startDate, endDate){
+  const start = new Date(startDate + "T00:00:00");
+  const end = new Date(endDate + "T00:00:00");
+  return Math.round((end - start) / 86400000) + 1;
 }
 
 // ====== RENDER: SIDEBAR RESOURCE LIST ======
@@ -122,15 +131,24 @@ function openDrawer(dateStr){
     body.innerHTML = dayBookings.map(b => {
       const res = getResource(b.resourceId);
       const statusLabel = { approved:"Disetujui", pending:"Menunggu", rejected:"Ditolak" }[b.status];
+      const isMultiDay = b.startDate !== b.endDate;
+      const rangeInfo = isMultiDay
+        ? `<div class="booking-range">📅 ${fmtDateLong(b.startDate)} – ${fmtDateLong(b.endDate)} <span class="booking-range-badge">${rangeDayCount(b.startDate, b.endDate)} hari</span></div>`
+        : "";
+      const letterInfo = b.letterNumber
+        ? `<div class="booking-letter">📄 ${b.letterNumber}</div>`
+        : "";
       return `
         <div class="booking-card type-${res.type}">
           <div class="booking-card-top">
             <span class="booking-time">${b.start} – ${b.end}</span>
             <span class="status-pill ${b.status}">${statusLabel}</span>
           </div>
+          ${rangeInfo}
           <div class="booking-resource">${res.type === "mobil" ? "🚗" : "🏛"} ${res.name} <span style="color:var(--ink-faint); font-weight:400;">· ${res.code}</span></div>
           <div class="booking-purpose">${b.purpose}</div>
           <div class="booking-requester">👤 ${b.requester}</div>
+          ${letterInfo}
         </div>`;
     }).join("");
   }
@@ -160,8 +178,9 @@ function populateResourceSelect(){
 function openModal(prefillDate){
   document.getElementById("modalOverlay").classList.add("open");
   populateResourceSelect();
-  const dateInput = document.getElementById("dateInput");
-  dateInput.value = prefillDate || fmtDateStr(new Date());
+  const initialDate = prefillDate || fmtDateStr(new Date());
+  document.getElementById("startDateInput").value = initialDate;
+  document.getElementById("endDateInput").value = initialDate;
   checkAvailability();
 }
 
@@ -171,23 +190,36 @@ function closeModal(){
   document.getElementById("availabilityNote").classList.remove("show");
 }
 
-// ====== CEK BENTROK JADWAL SEDERHANA ======
+// ====== CEK BENTROK JADWAL (mendukung rentang tanggal) ======
 function checkAvailability(){
   const resourceId = document.getElementById("resourceSelect").value;
-  const date = document.getElementById("dateInput").value;
+  const startDate = document.getElementById("startDateInput").value;
+  const endDate = document.getElementById("endDateInput").value;
   const start = document.getElementById("startTime").value;
   const end = document.getElementById("endTime").value;
   const note = document.getElementById("availabilityNote");
 
-  if(!resourceId || !date || !start || !end){
+  if(!resourceId || !startDate || !endDate || !start || !end){
     note.classList.remove("show");
     return;
   }
 
+  // Validasi: tanggal selesai tidak boleh sebelum tanggal mulai
+  if(endDate < startDate){
+    note.classList.add("show");
+    note.classList.remove("ok");
+    note.classList.add("conflict");
+    note.textContent = `⚠ Tanggal selesai tidak boleh sebelum tanggal mulai`;
+    return;
+  }
+
+  // Dua rentang [startDate,endDate] dan [b.startDate,b.endDate] overlap jika
+  // startDate <= b.endDate DAN endDate >= b.startDate. Untuk hari yang sama
+  // dalam rentang tersebut, baru dicek juga apakah jamnya beririsan.
   const conflict = BOOKINGS.find(b =>
     b.resourceId === resourceId &&
-    b.date === date &&
     b.status !== "rejected" &&
+    startDate <= b.endDate && endDate >= b.startDate &&
     start < b.end && end > b.start
   );
 
@@ -195,11 +227,14 @@ function checkAvailability(){
   if(conflict){
     note.classList.remove("ok");
     note.classList.add("conflict");
-    note.textContent = `⚠ Bentrok dengan jadwal ${conflict.start}–${conflict.end} (${conflict.purpose})`;
+    const conflictRange = conflict.startDate === conflict.endDate
+      ? fmtDateLong(conflict.startDate)
+      : `${fmtDateLong(conflict.startDate)} – ${fmtDateLong(conflict.endDate)}`;
+    note.textContent = `⚠ Bentrok dengan jadwal ${conflict.start}–${conflict.end} pada ${conflictRange} (${conflict.purpose})`;
   } else {
     note.classList.remove("conflict");
     note.classList.add("ok");
-    note.textContent = `✓ Unit tersedia pada slot waktu ini`;
+    note.textContent = `✓ Unit tersedia pada rentang waktu ini`;
   }
 }
 
@@ -217,10 +252,17 @@ function getFilteredRecapData(){
       const res = getResource(b.resourceId);
       if(typeFilter !== "all" && res.type !== typeFilter) return false;
       if(statusFilter !== "all" && b.status !== statusFilter) return false;
-      if(monthFilter && !b.date.startsWith(monthFilter)) return false;
+      // Booking dianggap masuk bulan filter jika rentang tanggalnya (startDate-endDate)
+      // bersinggungan dengan bulan tersebut — bukan cuma exact match startDate saja,
+      // supaya booking multi-hari yang melintasi pergantian bulan tetap muncul.
+      if(monthFilter){
+        const monthStart = monthFilter + "-01";
+        const monthEnd = monthFilter + "-31";
+        if(!(b.startDate <= monthEnd && b.endDate >= monthStart)) return false;
+      }
       return true;
     })
-    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+    .sort((a, b) => (a.startDate + a.start).localeCompare(b.startDate + b.start));
 }
 
 function renderRecapTable(){
@@ -235,14 +277,18 @@ function renderRecapTable(){
     emptyState.classList.remove("show");
     tbody.innerHTML = data.map(b => {
       const res = getResource(b.resourceId);
+      const dateCell = b.startDate === b.endDate
+        ? fmtDateLong(b.startDate)
+        : `${fmtDateLong(b.startDate)} – <br>${fmtDateLong(b.endDate)}`;
       return `
         <tr>
-          <td>${fmtDateLong(b.date)}</td>
+          <td>${dateCell}</td>
           <td>${b.start}–${b.end}</td>
           <td>${typeLabelMap[res.type]}</td>
           <td>${res.name} <span style="color:var(--ink-faint)">(${res.code})</span></td>
           <td class="col-purpose">${b.purpose}</td>
           <td>${b.requester}</td>
+          <td>${b.letterNumber || "-"}</td>
           <td><span class="recap-status-badge ${b.status}">${statusLabelMap[b.status]}</span></td>
         </tr>`;
     }).join("");
@@ -283,7 +329,8 @@ function exportRecapToExcel(){
   const rows = data.map(b => {
     const res = getResource(b.resourceId);
     return {
-      "Tanggal": fmtDateLong(b.date),
+      "Tanggal Mulai": fmtDateLong(b.startDate),
+      "Tanggal Selesai": fmtDateLong(b.endDate),
       "Jam Mulai": b.start,
       "Jam Selesai": b.end,
       "Jenis": typeLabelMap[res.type],
@@ -291,6 +338,7 @@ function exportRecapToExcel(){
       "Kode/Lokasi": res.code,
       "Keperluan": b.purpose,
       "Pemohon": b.requester,
+      "Nomor Surat/Nota Dinas": b.letterNumber || "-",
       "Status": statusLabelMap[b.status]
     };
   });
@@ -299,8 +347,8 @@ function exportRecapToExcel(){
 
   // Lebar kolom otomatis biar tidak terlalu sempit dibuka di Excel
   worksheet["!cols"] = [
-    { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 14 },
-    { wch: 18 }, { wch: 14 }, { wch: 32 }, { wch: 18 }, { wch: 12 }
+    { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 14 },
+    { wch: 18 }, { wch: 14 }, { wch: 32 }, { wch: 18 }, { wch: 20 }, { wch: 12 }
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -396,8 +444,18 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Live availability check
-  ["resourceSelect","dateInput","startTime","endTime"].forEach(id => {
+  ["resourceSelect","startDateInput","endDateInput","startTime","endTime"].forEach(id => {
     document.getElementById(id).addEventListener("change", checkAvailability);
+  });
+
+  // Saat tanggal mulai diubah, set otomatis "min" tanggal selesai supaya
+  // tidak bisa dipilih tanggal selesai sebelum tanggal mulai.
+  document.getElementById("startDateInput").addEventListener("change", (e) => {
+    const endDateInput = document.getElementById("endDateInput");
+    endDateInput.min = e.target.value;
+    if(endDateInput.value < e.target.value){
+      endDateInput.value = e.target.value;
+    }
   });
 
   // Submit form (demo only — belum ada backend)
@@ -405,21 +463,27 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     const resourceId = document.getElementById("resourceSelect").value;
     const res = getResource(resourceId);
-    const date = document.getElementById("dateInput").value;
+    const startDate = document.getElementById("startDateInput").value;
+    const endDate = document.getElementById("endDateInput").value;
     const start = document.getElementById("startTime").value;
     const end = document.getElementById("endTime").value;
     const purpose = document.getElementById("purposeInput").value;
     const requester = document.getElementById("nameInput").value;
+    const letterNumber = document.getElementById("letterNumberInput").value;
 
     BOOKINGS.push({
       id: "bk-" + Date.now(),
-      resourceId, date, start, end, purpose, requester,
+      resourceId, startDate, endDate, start, end, purpose, requester, letterNumber,
       status: "pending"
     });
 
     closeModal();
     renderCalendar();
-    alert(`Pengajuan berhasil dikirim!\n\n${res.name} · ${date}\n${start}–${end}\nStatus: Menunggu persetujuan`);
+
+    const rangeText = startDate === endDate
+      ? fmtDateLong(startDate)
+      : `${fmtDateLong(startDate)} – ${fmtDateLong(endDate)}`;
+    alert(`Pengajuan berhasil dikirim!\n\n${res.name} · ${rangeText}\n${start}–${end}\nNomor Surat: ${letterNumber || "-"}\nStatus: Menunggu persetujuan`);
   });
 
   // Recap modal: open/close

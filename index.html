@@ -157,9 +157,16 @@
 
       <div class="field-row">
         <div class="field">
-          <label for="dateInput">Tanggal</label>
-          <input type="date" id="dateInput" required>
+          <label for="startDateInput">Tanggal Mulai</label>
+          <input type="date" id="startDateInput" required>
         </div>
+        <div class="field">
+          <label for="endDateInput">Tanggal Selesai</label>
+          <input type="date" id="endDateInput" required>
+        </div>
+      </div>
+
+      <div class="field-row">
         <div class="field">
           <label for="startTime">Jam Mulai</label>
           <input type="time" id="startTime" value="09:00" required>
@@ -168,6 +175,11 @@
           <label for="endTime">Jam Selesai</label>
           <input type="time" id="endTime" value="11:00" required>
         </div>
+      </div>
+
+      <div class="field">
+        <label for="letterNumberInput">Nomor Surat/Nota Dinas</label>
+        <input type="text" id="letterNumberInput" placeholder="Contoh: ND-025/UMUM/VI/2026">
       </div>
 
       <div class="field">
@@ -229,6 +241,7 @@
             <th>Unit</th>
             <th>Keperluan</th>
             <th>Pemohon</th>
+            <th>No. Surat</th>
             <th>Status</th>
           </tr>
         </thead>
