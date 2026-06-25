@@ -922,19 +922,20 @@ button, [role="button"], input, select{
   flex:1;
   overflow:auto;
   min-height:0;
-  padding:0.75rem 1.25rem;
+  padding:0 1.25rem;
 }
 
 .recap-table{
   width:100%;
-  border-collapse:collapse;
+  border-collapse:separate;
+  border-spacing:0;
   font-size:0.8125rem;
+  margin:0.75rem 0;
 }
 .recap-table thead{
-  background:var(--navy-800);
   position:sticky;
   top:0;
-  z-index:1;
+  z-index:2;
 }
 .recap-table th{
   text-align:left;
@@ -945,7 +946,13 @@ button, [role="button"], input, select{
   text-transform:uppercase;
   letter-spacing:0.04em;
   white-space:nowrap;
+  background:var(--navy-800); /* background solid di TH, bukan di THEAD — supaya
+    konten yang discroll di baliknya benar-benar tertutup rapat, tidak tembus */
+  position:sticky;
+  top:0;
 }
+.recap-table th:first-child{border-top-left-radius:var(--radius-sm);}
+.recap-table th:last-child{border-top-right-radius:var(--radius-sm);}
 .recap-table td{
   padding:0.625rem 0.875rem;
   border-bottom:0.0625rem solid var(--line);
@@ -1007,11 +1014,19 @@ button, [role="button"], input, select{
 /* ---- Recap modal: stack filters and toolbar on narrow screens ---- */
 @media (max-width: 40em){ /* ~640px */
   .recap-toolbar{flex-direction:column;align-items:stretch;}
-  .recap-filters{flex-direction:column;}
-  .recap-select{flex:1 1 auto;min-width:0;}
+
+  /* Filter Jenis & Status sejajar 1 row; filter Bulan di baris berikutnya full-width */
+  .recap-filters{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0.5rem;
+  }
+  .recap-filters #recapMonthFilter{grid-column:1 / -1;}
+
+  .recap-select{flex:1 1 auto;min-width:0;width:100%;}
   .btn-export{width:100%;}
   .modal-wide{width:100%;}
-  .recap-table-wrap{padding:0.5rem 0.75rem;}
+  .recap-table-wrap{padding:0 0.75rem;}
 }
 
 /* ---- Tablet and up: reveal desktop sidebar, hide mobile topbar ---- */

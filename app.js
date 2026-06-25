@@ -316,16 +316,12 @@ function renderRecapTable(){
     }).join("");
   }
 
-  // Summary ringkas: total per status dari hasil filter saat ini
+  // Summary ringkas: cukup Total dan Menunggu sesuai hasil filter saat ini
   const total = data.length;
-  const approved = data.filter(b => b.status === "approved").length;
   const pending = data.filter(b => b.status === "pending").length;
-  const rejected = data.filter(b => b.status === "rejected").length;
   document.getElementById("recapSummary").innerHTML = `
     <span>Total: <strong>${total}</strong></span>
-    <span>Disetujui: <strong>${approved}</strong></span>
     <span>Menunggu: <strong>${pending}</strong></span>
-    <span>Ditolak: <strong>${rejected}</strong></span>
   `;
 }
 
