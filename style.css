@@ -129,11 +129,7 @@ button, [role="button"], input, select{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  font-size:0.8125rem;
-  font-weight:600;
-  text-transform:uppercase;
-  letter-spacing:0.06em;
-  color:#8a96b8;
+  gap:0.75rem;
   margin-bottom:0.25rem;
 }
 .sidebar-head-mobile .icon-btn{
@@ -142,7 +138,55 @@ button, [role="button"], input, select{
   color:#fff;
   width:2.25rem;height:2.25rem;
   min-height:2.25rem;
+  flex-shrink:0;
 }
+
+/* ===== USER INFO (avatar + nama + email) ===== */
+.user-info{
+  display:flex;
+  align-items:center;
+  gap:0.625rem;
+  min-width:0;
+}
+.user-avatar{
+  width:2.25rem;height:2.25rem;
+  border-radius:50%;
+  background:linear-gradient(135deg, #4a5a85, var(--navy-600));
+  color:#fff;
+  font-family:var(--font-display);
+  font-weight:700;
+  font-size:0.78125rem;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.user-meta{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  line-height:1.3;
+}
+.user-name{
+  font-size:0.8125rem;
+  font-weight:600;
+  color:#fff;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.user-email{
+  font-size:0.6875rem;
+  color:#8a96b8;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Versi desktop (topbar, di atas latar terang) — override warna teks */
+.user-info-desktop .user-avatar{
+  background:linear-gradient(135deg, var(--navy-600), var(--navy-800));
+}
+.user-info-desktop .user-name{color:var(--ink);}
+.user-info-desktop .user-email{color:var(--ink-faint);}
 
 .sidebar-scrim{
   display:none;
@@ -322,6 +366,16 @@ button, [role="button"], input, select{
 }
 .resource-chip span{font-size:0.71875rem;color:#8a96b8;font-family:var(--font-mono);margin-top:0.125rem;}
 
+.resource-empty{
+  font-size:0.78125rem;
+  color:#6b7796;
+  padding:0.875rem 0.75rem;
+  text-align:center;
+  background:rgba(255,255,255,0.03);
+  border:0.0625rem dashed rgba(255,255,255,0.12);
+  border-radius:var(--radius-sm);
+}
+
 .legend-row{
   display:flex;align-items:center;gap:0.5625rem;
   font-size:0.8125rem;color:#c7cee3;
@@ -362,6 +416,26 @@ button, [role="button"], input, select{
 }
 .subtle{font-size:0.8125rem;color:var(--ink-soft);}
 .topbar-right{display:flex;align-items:center;gap:0.5rem;flex-shrink:0;}
+.topbar-right-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;}
+
+/* ---- Mobile: topbar & isinya center-align ---- */
+@media (max-width: 56.1875em){ /* dibawah breakpoint desktop 900px */
+  .topbar{
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+  }
+  .topbar-left{
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .topbar-right-wrap{align-items:center;width:100%;}
+  .topbar-right{justify-content:center;width:100%;}
+  .user-info-desktop{display:none;} /* versi desktop disembunyikan, mobile pakai versi di sidebar */
+}
 
 .icon-btn{
   width:var(--touch);height:var(--touch);
@@ -624,6 +698,7 @@ button, [role="button"], input, select{
   margin-top:0.125rem;
   display:flex;align-items:center;gap:0.3125rem;
 }
+.booking-division{color:var(--ink-faint);font-weight:500;}
 .booking-range{
   font-size:0.75rem;
   color:var(--blue-tag);
@@ -847,6 +922,7 @@ button, [role="button"], input, select{
   flex:1;
   overflow:auto;
   min-height:0;
+  padding:0.75rem 1.25rem;
 }
 
 .recap-table{
@@ -935,6 +1011,7 @@ button, [role="button"], input, select{
   .recap-select{flex:1 1 auto;min-width:0;}
   .btn-export{width:100%;}
   .modal-wide{width:100%;}
+  .recap-table-wrap{padding:0.5rem 0.75rem;}
 }
 
 /* ---- Tablet and up: reveal desktop sidebar, hide mobile topbar ---- */

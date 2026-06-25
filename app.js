@@ -346,13 +346,14 @@ function exportRecapToExcel(){
     return;
   }
 
-  // Susun data jadi array-of-objects dengan header berbahasa Indonesia,
-  // supaya hasil file Excel langsung enak dibaca tanpa perlu rename kolom.
+  // Tanggal Mulai/Selesai dikirim sebagai objek Date asli (bukan string format
+  // panjang) supaya Excel mengenalinya sebagai kolom Date sungguhan — bisa
+  // di-sort, difilter, dan diformat ulang oleh user di Excel.
   const rows = data.map(b => {
     const res = getResource(b.resourceId);
     return {
-      "Tanggal Mulai": fmtDateLong(b.startDate),
-      "Tanggal Selesai": fmtDateLong(b.endDate),
+      "Tanggal Mulai": new Date(b.startDate + "T00:00:00"),
+      "Tanggal Selesai": new Date(b.endDate + "T00:00:00"),
       "Jam Mulai": b.start,
       "Jam Selesai": b.end,
       "Jenis": typeLabelMap[res.type],
@@ -366,11 +367,24 @@ function exportRecapToExcel(){
     };
   });
 
-  const worksheet = XLSX.utils.json_to_sheet(rows);
+  const worksheet = XLSX.utils.json_to_sheet(rows, { cellDates: true });
+
+  // Set format tampilan cell untuk kolom Tanggal Mulai (A) & Tanggal Selesai (B)
+  // jadi "dd/mm/yyyy" — format umum di Indonesia — bukan format default Excel.
+  const dateFormat = "dd/mm/yyyy";
+  const rowCount = rows.length;
+  for(let r = 2; r <= rowCount + 1; r++){
+    ["A","B"].forEach(col => {
+      const cellRef = `${col}${r}`;
+      if(worksheet[cellRef]){
+        worksheet[cellRef].z = dateFormat;
+      }
+    });
+  }
 
   // Lebar kolom otomatis biar tidak terlalu sempit dibuka di Excel
   worksheet["!cols"] = [
-    { wch: 22 }, { wch: 22 }, { wch: 10 }, { wch: 10 }, { wch: 14 },
+    { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 14 },
     { wch: 18 }, { wch: 14 }, { wch: 32 }, { wch: 18 }, { wch: 16 }, { wch: 20 }, { wch: 12 }
   ];
 
