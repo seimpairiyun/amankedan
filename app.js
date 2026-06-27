@@ -1,8 +1,6 @@
 // ====== STATE ======
 let currentDate = new Date();
-// activeTypes tidak lagi dikontrol checkbox (filter Jenis Resource di sidebar
-// sudah dihapus) — sekarang selalu menampilkan semua jenis resource.
-const activeTypes = new Set(["mobil", "ruangan"]);
+let activeTypes = new Set(["mobil", "ruangan"]);
 let selectedDateStr = null;
 
 const monthNames = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
@@ -43,48 +41,35 @@ function rangeDayCount(startDate, endDate){
 }
 
 // Cek apakah sebuah resource sedang dibooking pada tanggal hari ini.
-// Status "pending" maupun "approved" keduanya dihitung memblokir unit,
-// supaya tidak terjadi potensi double-booking selagi menunggu approval.
+// Status "rejected" tidak dihitung karena tidak benar-benar memblokir unit;
+// "pending" tetap dihitung supaya tidak terjadi potensi double-booking
+// selagi menunggu approval.
 function isResourceBookedToday(resourceId){
   const todayStr = fmtDateStr(new Date());
   return BOOKINGS.some(b =>
     b.resourceId === resourceId &&
+    b.status !== "rejected" &&
     todayStr >= b.startDate && todayStr <= b.endDate
   );
 }
 
 // ====== RENDER: SIDEBAR RESOURCE LIST ======
 function renderResourceList(){
-  const availableResources = RESOURCES
+  const list = document.getElementById("resourceList");
+  list.innerHTML = "";
+  RESOURCES
     .filter(r => activeTypes.has(r.type))
-    .filter(r => !isResourceBookedToday(r.id)); // sembunyikan unit yang sedang terpakai hari ini
+    .filter(r => !isResourceBookedToday(r.id)) // sembunyikan unit yang sedang terpakai hari ini
+    .forEach(r => {
+      const chip = document.createElement("div");
+      chip.className = "resource-chip";
+      chip.innerHTML = `<strong>${r.type === "mobil" ? "🚗" : "🏛"} ${r.name}</strong><span>${r.code} · ${r.capacity}</span>`;
+      list.appendChild(chip);
+    });
 
-  // ---- Versi SIDEBAR (desktop & off-canvas mobile): kartu 2 baris, detail lengkap ----
-  let sidebarHtml;
-  if(availableResources.length === 0){
-    sidebarHtml = `<div class="resource-empty">Semua unit sedang dipakai hari ini.</div>`;
-  } else {
-    sidebarHtml = availableResources.map(r =>
-      `<div class="resource-chip"><strong>${r.type === "mobil" ? "🚗" : "🏛"} ${r.name}</strong><span>${r.code} · ${r.capacity}</span></div>`
-    ).join("");
-  }
-  document.getElementById("resourceList").innerHTML = sidebarHtml;
-
-  // ---- Versi MOBILE (di bawah kalender): pill ringkas 1 baris per unit ----
-  const mobileList = document.getElementById("resourceListMobile");
-  if(mobileList){
-    let mobileHtml;
-    if(availableResources.length === 0){
-      mobileHtml = `<div class="resource-empty">Semua unit sedang dipakai hari ini.</div>`;
-    } else {
-      mobileHtml = availableResources.map(r =>
-        `<div class="resource-pill resource-pill-${r.type}">
-           <span class="resource-pill-icon">${r.type === "mobil" ? "🚗" : "🏛"}</span>
-           <span class="resource-pill-text">${r.name} <span class="resource-pill-dash">–</span> ${r.code}</span>
-         </div>`
-      ).join("");
-    }
-    mobileList.innerHTML = mobileHtml;
+  // Pesan kalau semua unit pada kategori yang dipilih sedang terpakai hari ini
+  if(list.children.length === 0){
+    list.innerHTML = `<div class="resource-empty">Semua unit sedang dipakai hari ini.</div>`;
   }
 }
 
@@ -274,51 +259,31 @@ function checkAvailability(){
   }
 }
 
-// ====== REKAPITULASI: render tabel + filter + sort + export Excel ======
-const statusLabelMap = { approved: "Disetujui", pending: "Menunggu" };
+// ====== REKAPITULASI: render tabel + filter + export Excel ======
+const statusLabelMap = { approved: "Disetujui", pending: "Menunggu", rejected: "Ditolak" };
 const typeLabelMap = { mobil: "Mobil Dinas", ruangan: "Ruang Rapat" };
 
-// State sorting tabel rekap: kolom aktif & arah (asc/desc)
-let recapSortKey = "date";
-let recapSortDir = "asc";
-
 function getFilteredRecapData(){
+  const typeFilter = document.getElementById("recapTypeFilter").value;
   const statusFilter = document.getElementById("recapStatusFilter").value;
   const monthFilter = document.getElementById("recapMonthFilter").value; // format YYYY-MM
 
-  let data = BOOKINGS.filter(b => {
-    if(statusFilter !== "all" && b.status !== statusFilter) return false;
-    // Booking dianggap masuk bulan filter jika rentang tanggalnya (startDate-endDate)
-    // bersinggungan dengan bulan tersebut — bukan cuma exact match startDate saja,
-    // supaya booking multi-hari yang melintasi pergantian bulan tetap muncul.
-    if(monthFilter){
-      const monthStart = monthFilter + "-01";
-      const monthEnd = monthFilter + "-31";
-      if(!(b.startDate <= monthEnd && b.endDate >= monthStart)) return false;
-    }
-    return true;
-  });
-
-  // Sorting berdasarkan kolom yang dipilih user lewat tombol header
-  const dir = recapSortDir === "asc" ? 1 : -1;
-  data.sort((a, b) => {
-    let valA, valB;
-    switch(recapSortKey){
-      case "date": valA = a.startDate + a.start; valB = b.startDate + b.start; break;
-      case "time": valA = a.start; valB = b.start; break;
-      case "type": valA = getResource(a.resourceId).type; valB = getResource(b.resourceId).type; break;
-      case "unit": valA = getResource(a.resourceId).name; valB = getResource(b.resourceId).name; break;
-      case "purpose": valA = a.purpose; valB = b.purpose; break;
-      case "requester": valA = a.requester; valB = b.requester; break;
-      case "division": valA = a.division || ""; valB = b.division || ""; break;
-      case "letterNumber": valA = a.letterNumber || ""; valB = b.letterNumber || ""; break;
-      case "status": valA = a.status; valB = b.status; break;
-      default: valA = a.startDate; valB = b.startDate;
-    }
-    return valA.localeCompare(valB) * dir;
-  });
-
-  return data;
+  return BOOKINGS
+    .filter(b => {
+      const res = getResource(b.resourceId);
+      if(typeFilter !== "all" && res.type !== typeFilter) return false;
+      if(statusFilter !== "all" && b.status !== statusFilter) return false;
+      // Booking dianggap masuk bulan filter jika rentang tanggalnya (startDate-endDate)
+      // bersinggungan dengan bulan tersebut — bukan cuma exact match startDate saja,
+      // supaya booking multi-hari yang melintasi pergantian bulan tetap muncul.
+      if(monthFilter){
+        const monthStart = monthFilter + "-01";
+        const monthEnd = monthFilter + "-31";
+        if(!(b.startDate <= monthEnd && b.endDate >= monthStart)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => (a.startDate + a.start).localeCompare(b.startDate + b.start));
 }
 
 function renderRecapTable(){
@@ -331,14 +296,13 @@ function renderRecapTable(){
     emptyState.classList.add("show");
   } else {
     emptyState.classList.remove("show");
-    tbody.innerHTML = data.map((b, idx) => {
+    tbody.innerHTML = data.map(b => {
       const res = getResource(b.resourceId);
       const dateCell = b.startDate === b.endDate
         ? fmtDateLong(b.startDate)
         : `${fmtDateLong(b.startDate)} – <br>${fmtDateLong(b.endDate)}`;
       return `
         <tr>
-          <td class="col-no">${idx + 1}</td>
           <td>${dateCell}</td>
           <td>${b.start}–${b.end}</td>
           <td>${typeLabelMap[res.type]}</td>
@@ -352,18 +316,6 @@ function renderRecapTable(){
     }).join("");
   }
 
-  // Update indikator visual arah sort (▲/▼) pada tombol header yang sedang aktif
-  document.querySelectorAll(".sort-btn").forEach(btn => {
-    const icon = btn.querySelector(".sort-icon");
-    if(btn.dataset.sort === recapSortKey){
-      icon.textContent = recapSortDir === "asc" ? "▲" : "▼";
-      btn.classList.add("sort-active");
-    } else {
-      icon.textContent = "⇅";
-      btn.classList.remove("sort-active");
-    }
-  });
-
   // Summary ringkas: cukup Total dan Menunggu sesuai hasil filter saat ini
   const total = data.length;
   const pending = data.filter(b => b.status === "pending").length;
@@ -373,71 +325,8 @@ function renderRecapTable(){
   `;
 }
 
-// ====== APPROVAL / ADMIN: terima atau hapus pengajuan ======
-function renderApprovalList(){
-  const body = document.getElementById("approvalBody");
-
-  // Tampilkan semua booking yang masih relevan untuk ditindaklanjuti,
-  // diurutkan supaya yang "Menunggu" muncul lebih dulu (paling butuh aksi).
-  const sorted = [...BOOKINGS].sort((a, b) => {
-    if(a.status !== b.status) return a.status === "pending" ? -1 : 1;
-    return (a.startDate + a.start).localeCompare(b.startDate + b.start);
-  });
-
-  if(sorted.length === 0){
-    body.innerHTML = `
-      <div class="empty-day">
-        <strong>Belum ada pengajuan</strong>
-        <span>Belum ada data peminjaman untuk dikelola.</span>
-      </div>`;
-    return;
-  }
-
-  body.innerHTML = sorted.map(b => {
-    const res = getResource(b.resourceId);
-    const statusLabel = statusLabelMap[b.status] || b.status;
-    const dateText = b.startDate === b.endDate
-      ? fmtDateLong(b.startDate)
-      : `${fmtDateLong(b.startDate)} – ${fmtDateLong(b.endDate)}`;
-    return `
-      <div class="booking-card type-${res.type}" data-booking-id="${b.id}">
-        <div class="booking-card-top">
-          <span class="booking-time">${b.start} – ${b.end}</span>
-          <span class="status-pill ${b.status}">${statusLabel}</span>
-        </div>
-        <div class="booking-range">📅 ${dateText}</div>
-        <div class="booking-resource">${res.type === "mobil" ? "🚗" : "🏛"} ${res.name} <span style="color:var(--ink-faint); font-weight:400;">· ${res.code}</span></div>
-        <div class="booking-purpose">${b.purpose}</div>
-        <div class="booking-requester">👤 ${b.requester}${b.division ? ` <span class="booking-division">· ${b.division}</span>` : ""}</div>
-        ${b.letterNumber ? `<div class="booking-letter">📄 ${b.letterNumber}</div>` : ""}
-        <div class="approval-actions">
-          <button type="button" class="btn-approve" data-action="approve" data-id="${b.id}" ${b.status === "approved" ? "disabled" : ""}>
-            ✓ Terima
-          </button>
-          <button type="button" class="btn-delete" data-action="delete" data-id="${b.id}">
-            🗑 Hapus
-          </button>
-        </div>
-      </div>`;
-  }).join("");
-}
-
-function openApproval(){
-  document.getElementById("approvalOverlay").classList.add("open");
-  renderApprovalList();
-}
-
-function closeApproval(){
-  document.getElementById("approvalOverlay").classList.remove("open");
-}
-
 function openRecap(){
   document.getElementById("recapOverlay").classList.add("open");
-  // Default filter bulan = bulan saat ini, supaya rekap yang relevan
-  // langsung terlihat tanpa perlu pilih manual setiap kali dibuka.
-  const now = new Date();
-  const currentMonthValue = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  document.getElementById("recapMonthFilter").value = currentMonthValue;
   renderRecapTable();
 }
 
@@ -534,8 +423,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if(window.innerWidth >= 900) closeSidebar();
   });
 
-  // (Filter checkbox Jenis Resource telah dihapus dari sidebar — activeTypes
-  // sekarang konstan berisi semua jenis, lihat deklarasi di bagian STATE)
+  // Filter checkboxes
+  document.querySelectorAll(".filter-type").forEach(cb => {
+    cb.addEventListener("change", () => {
+      activeTypes = new Set(
+        [...document.querySelectorAll(".filter-type:checked")].map(c => c.value)
+      );
+      renderResourceList();
+      renderCalendar();
+    });
+  });
 
   // Month navigation
   document.getElementById("prevMonth").addEventListener("click", () => {
@@ -634,108 +531,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if(e.target.id === "recapOverlay") closeRecap();
   });
 
-  // Approval/Admin drawer: open/close
-  document.getElementById("btnApproval").addEventListener("click", () => {
-    closeSidebar(); // tutup sidebar mobile dulu kalau lagi terbuka
-    openApproval();
-  });
-  document.getElementById("closeApproval").addEventListener("click", closeApproval);
-  document.getElementById("approvalOverlay").addEventListener("click", (e) => {
-    if(e.target.id === "approvalOverlay") closeApproval();
-  });
-
-  // Delegasi klik tombol Terima/Hapus di dalam daftar approval (daftar
-  // di-render ulang secara dinamis, jadi listener dipasang di parent tetap).
-  document.getElementById("approvalBody").addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-action]");
-    if(!btn) return;
-    const bookingId = btn.dataset.id;
-    const booking = BOOKINGS.find(b => b.id === bookingId);
-    if(!booking) return;
-
-    if(btn.dataset.action === "approve"){
-      booking.status = "approved";
-      renderApprovalList();
-      renderCalendar();
-      renderResourceList();
-    } else if(btn.dataset.action === "delete"){
-      const confirmed = confirm(`Hapus pengajuan ini?\n\n${booking.purpose}\nPemohon: ${booking.requester}\n\nTindakan ini tidak dapat dibatalkan.`);
-      if(confirmed){
-        const idx = BOOKINGS.findIndex(b => b.id === bookingId);
-        if(idx !== -1) BOOKINGS.splice(idx, 1);
-        renderApprovalList();
-        renderCalendar();
-        renderResourceList();
-      }
-    }
-  });
-
-  // ===== LOGIN OPTIONS =====
-  // Catatan: ini adalah prototype frontend tanpa backend/OAuth sungguhan.
-  // Google & Microsoft butuh integrasi OAuth nyata (client ID, redirect, dst)
-  // yang hanya bisa berjalan di server sungguhan — jadi di sini ditampilkan
-  // sebagai placeholder yang jujur, bukan pura-pura berhasil login.
-  document.getElementById("btnLoginGoogle").addEventListener("click", () => {
-    alert("Login dengan Google memerlukan integrasi OAuth di backend.\n\nIni adalah tampilan prototype — hubungkan ke Google Identity Services saat backend sudah siap.");
-  });
-  document.getElementById("btnLoginMicrosoft").addEventListener("click", () => {
-    alert("Login dengan Microsoft memerlukan integrasi OAuth (Azure AD/Entra ID) di backend.\n\nIni adalah tampilan prototype — hubungkan ke Microsoft Identity Platform saat backend sudah siap.");
-  });
-
-  // Login Email: ini bisa disimulasikan di sisi frontend karena tidak butuh
-  // redirect ke provider luar — submit akan mengganti identitas user yang
-  // tampil di topbar & sidebar, supaya tetap ada feedback nyata buat demo.
-  function openLoginEmail(){
-    document.getElementById("loginEmailOverlay").classList.add("open");
-  }
-  function closeLoginEmail(){
-    document.getElementById("loginEmailOverlay").classList.remove("open");
-    document.getElementById("loginEmailForm").reset();
-  }
-  document.getElementById("btnLoginEmail").addEventListener("click", () => {
-    closeSidebar();
-    openLoginEmail();
-  });
-  document.getElementById("closeLoginEmail").addEventListener("click", closeLoginEmail);
-  document.getElementById("cancelLoginEmail").addEventListener("click", closeLoginEmail);
-  document.getElementById("loginEmailOverlay").addEventListener("click", (e) => {
-    if(e.target.id === "loginEmailOverlay") closeLoginEmail();
-  });
-  document.getElementById("loginEmailForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const email = document.getElementById("loginEmailInput").value;
-    // Ambil bagian sebelum @ sebagai nama tampilan sederhana, dan inisial
-    // dua huruf pertama untuk avatar — supaya UI user-info terasa "hidup".
-    const namePart = email.split("@")[0].replace(/[._]/g, " ");
-    const displayName = namePart.replace(/\b\w/g, c => c.toUpperCase());
-    const initials = displayName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-
-    document.querySelectorAll(".user-name").forEach(el => el.textContent = displayName);
-    document.querySelectorAll(".user-email").forEach(el => el.textContent = email);
-    document.querySelectorAll(".user-avatar").forEach(el => el.textContent = initials);
-
-    closeLoginEmail();
-    alert(`Berhasil masuk sebagai ${displayName}.`);
-  });
-
   // Recap filters — live update tabel begitu filter diganti
-  ["recapStatusFilter","recapMonthFilter"].forEach(id => {
+  ["recapTypeFilter","recapStatusFilter","recapMonthFilter"].forEach(id => {
     document.getElementById(id).addEventListener("change", renderRecapTable);
-  });
-
-  // Ordering: klik header kolom untuk sort — klik lagi pada kolom yang sama
-  // membalik arah (asc <-> desc), klik kolom lain mulai dari asc.
-  document.querySelectorAll(".sort-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const key = btn.dataset.sort;
-      if(recapSortKey === key){
-        recapSortDir = recapSortDir === "asc" ? "desc" : "asc";
-      } else {
-        recapSortKey = key;
-        recapSortDir = "asc";
-      }
-      renderRecapTable();
-    });
   });
 
   // Export ke Excel
