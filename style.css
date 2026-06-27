@@ -100,6 +100,63 @@ button, [role="button"], input, select{
 }
 .icon-btn-accent .plus{font-size:1.25rem;font-weight:700;color:#fff;}
 
+/* ===== SHIMMER BORDER EFFECT =====
+   Efek "cahaya berjalan" mengelilingi border tombol — dibuat dengan
+   conic-gradient yang diputar terus-menerus di pseudo-element ::before,
+   lalu di-mask (padding-box vs border-box) supaya cahaya hanya tampil
+   di area border, bukan menutupi seluruh background tombol. */
+.btn-shimmer{
+  position:relative;
+  isolation:isolate; /* supaya ::before tidak tertimpa konten sibling lain */
+}
+.btn-shimmer::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  padding:0.125rem; /* setara ketebalan border yang "berkilau" */
+  background:conic-gradient(
+    from var(--shimmer-angle, 0deg),
+    transparent 0%,
+    transparent 65%,
+    rgba(255,255,255,0.95) 78%,
+    var(--orange) 85%,
+    transparent 92%,
+    transparent 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  animation:shimmer-spin 2.8s linear infinite;
+  pointer-events:none;
+  z-index:1;
+}
+@property --shimmer-angle{
+  syntax:'<angle>';
+  initial-value:0deg;
+  inherits:false;
+}
+@keyframes shimmer-spin{
+  to{--shimmer-angle:360deg;}
+}
+/* Fallback untuk browser tanpa dukungan @property: animasi transform rotate
+   pada wrapper gradient tetap memberi efek berputar meski custom property
+   animasi tidak didukung. */
+@supports not (background: conic-gradient(from 0deg, red, blue)){
+  .btn-shimmer::before{
+    background:conic-gradient(transparent 0%, transparent 65%, rgba(255,255,255,0.95) 78%, var(--orange) 85%, transparent 92%, transparent 100%);
+    animation:shimmer-rotate 2.8s linear infinite;
+  }
+  @keyframes shimmer-rotate{
+    to{transform:rotate(360deg);}
+  }
+}
+
 /* ===== SIDEBAR ===== */
 .sidebar{
   background:var(--navy-900);
@@ -322,6 +379,16 @@ button, [role="button"], input, select{
 .btn-login:active{transform:scale(0.98);}
 .btn-login svg{flex-shrink:0;}
 .btn-login-email svg{color:#dde2ef;}
+
+.login-email-hint{
+  font-size:0.8125rem;
+  color:var(--ink-soft);
+  line-height:1.5;
+  margin:0;
+  padding:0.75rem 0.875rem;
+  background:var(--blue-tag-soft);
+  border-radius:var(--radius-sm);
+}
 
 .sidebar-footer{
   font-size:0.71875rem;

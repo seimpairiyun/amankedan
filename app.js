@@ -715,7 +715,10 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".user-avatar").forEach(el => el.textContent = initials);
 
     closeLoginEmail();
-    alert(`Berhasil masuk sebagai ${displayName}.`);
+    // Catatan: di implementasi nyata, magic link dikirim ke email dan baru
+    // login setelah link diklik (tidak langsung). Di prototype frontend ini
+    // disimulasikan langsung berhasil supaya demo tetap bisa dicoba tanpa backend.
+    alert(`Tautan masuk telah "dikirim" ke ${email}.\n\n(Simulasi prototype — langsung masuk sebagai ${displayName})`);
   });
 
   // Recap filters — live update tabel begitu filter diganti
